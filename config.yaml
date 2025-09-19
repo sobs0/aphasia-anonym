@@ -1,0 +1,251 @@
+# Experiment Configurations
+
+# Pipeline Execution Control
+execution:
+  pipelines_to_run: 
+    - "#"  # Options: ["initial_processing"], ["asr_training"], ["asr_grid_search"] ["asr_evaluation"], ["asv_evaluation"], ["all"]
+    
+# Data Input Configuration
+data_input: 
+  base_data_dir: "#" # Base directory containing .cha and .wav files
+  audio_subdir: "#"  # Subdirectory containing wav files
+  cha_files_pattern: "**/*.cha"
+  wav_files_pattern: "**/*.wav"
+  exclude_dirs: ["#", "#"]
+
+# Data Filtering Options
+data_filtering:
+  filter_mode: "all"  # Options: "all", "specific_speakers", "specific_recordings", "include_dirs"
+  
+  # Used when filter_mode is "specific_speakers"
+  specific_speakers: []
+  
+  # Used when filter_mode is "specific_recordings" 
+  specific_recordings: []
+  
+  # Used when filter_mode is "include_dirs" (replaces specific_directory)
+  include_dirs: []
+  
+  # Aphasia patient filtering
+  exclude_wab_type: "notaphasicbywab"  # WAB_type value to exclude (case-insensitive)
+  exclude_wab_score: 100  # WAB_score value to exclude (speakers with perfect scores)
+
+# Data Processing Parameters
+processing:
+  # Audio length thresholds (seconds)
+  min_asr_length: 1.0    # Minimum length for ASR suitability
+  min_asv_length: 1.8    # Minimum length for ASV suitability
+  
+  # Silence filtering
+  silence_outlier_method: "iqr"
+  silence_outlier_factor: 1.5  # 1.5 * IQR for outlier detection
+  silence_threshold_ms: 2000    # Minimum pause length to consider (2 seconds)
+  
+  # Train/Validation/Test split
+  split_ratios: [0.7, 0.15, 0.15]  # Must sum to 1.0
+  random_seed: 42
+  split_strategy: "hierarchical_stratified"  # Options: "simple_speaker", "hierarchical_stratified"
+  # hierarchical_stratified: Stratifies by WAB_type → WAB_score → Gender → Age
+  # simple_speaker: Only ensures speaker isolation (no demographic balancing)
+  
+  # Hierarchical stratification parameters
+  stratification_hierarchy: ["WAB_type", "WAB_score", "gender", "age"]
+  wab_severity_thresholds: [93.8, 76, 51, 26]  # Thresholds for severity bins
+  age_bins: [40, 60, 75]  # Age bin boundaries
+  
+  # Intermediate file names
+  filtered_metadata_filename: "filtered_metadata.csv"
+  filtered_load_data_filename: "filtered_load_data.csv"
+  chunks_data_filename: "output_chunks_data.csv"
+  chunks_with_audio_filename: "chunks_with_audio.csv"
+  silence_filtered_filename: "silence_filtered_chunks.csv"
+  anonymized_chunks_filename: "anonymized_chunks.csv"
+  silence_padded_filename: "silence_padded_chunks.csv"
+  length_marked_filename: "length_marked_chunks.csv"
+  transcript_cleaned_filename: "transcript_cleaned_chunks.csv"
+  split_chunks_filename: "split_chunks.csv"
+  completed_metadata_filename: "completed_metadata.csv"
+  chunks_with_asv_roles_filename: "chunks_with_asv_roles.csv"
+
+# Metadata Extraction Configuration
+metadata_extraction:
+  target_id_pattern: "@ID.*PAR"  # Pattern to identify participant rows in .cha files
+  
+  # Conflict resolution when multiple values exist per speaker
+  gender_conflict_resolution: "unisex"   # Options: "unisex", "first", "most_common"
+  age_conflict_resolution: "max"         # Options: "max", "min", "mean", "first"
+  wab_type_conflict_resolution: "aphasia" # Default when conflicts exist
+  wab_score_conflict_resolution: "min"   # Options: "min", "max", "mean", "first"
+  
+  # Default values when missing
+  default_wab_type: "aphasia"
+
+# Voice Anonymization
+anonymization:
+  mcadams_coefficient_range: [0.5, 0.9]  # Range for McAdams coefficient values (random per chunk)
+
+# ASV Configuration
+asv_evaluation:
+  # Trial pair generation - per speaker approach
+  trials_per_speaker: 100  # Number of trial pairs per enrollment speaker
+  same_speaker_ratio: 0.05  # 5% same speaker pairs, 95% different speaker pairs per speaker
+  asv_data_percentage: 100  # Data percentage for testing purposes
+  
+  # Enrollment data constraints
+  min_enrollment_utterances: 5  # Minimum number of enrollment utterances per speaker
+  max_enrollment_ratio: 0.15  # Maximum 15% of speaker's utterances for enrollment
+  
+  # Attack levels for evaluation
+  attack_levels:
+    unprotected: "oo"  # Original enrollment vs Original trial
+    ignorant: "oa"     # Original enrollment vs Anonymized trial
+    lazy_informed: "aa" # Anonymized enrollment vs Anonymized trial
+
+  use_bootstrap_analysis: true  # Set to true to use bootstrap
+  n_bootstrap_iterations: 50
+
+# ASV Model Evaluation Configuration  
+asv_model_evaluation:
+  # Multiple evaluation runs for statistical analysis
+  num_evaluation_runs: 1  # Number of times to evaluate each attack level
+  
+  # SpeechBrain ECAPA-TDNN model
+  model_source: "speechbrain/spkrec-ecapa-voxceleb"
+  
+  # Evaluation settings
+  batch_size: 2
+  similarity_metric: "cosine"  # cosine similarity for speaker verification
+
+  use_bootstrap_analysis: true  # Set to true to use bootstrap
+  n_bootstrap_iterations: 50
+  
+  # Output files
+  individual_results_filename: "asv_individual_results.csv"  # All trial results per run
+  summary_results_filename: "asv_results.csv"  # EER/AUC summary per attack level
+
+# Silence Padding for ASR
+silence_padding:
+  target_start_silence_ms: 250  # Target silence at beginning of audio (ms)
+  target_end_silence_ms: 250    # Target silence at end of audio (ms)
+  vad_mode: 3                   # WebRTC VAD aggressiveness (0=aggressive, 3=tolerant)
+  frame_ms: 30                  # VAD frame size (ms)
+
+# ASR Evaluation Configuration
+asr_evaluation:
+  # Multiple evaluation runs for statistical analysis
+  num_evaluation_runs: 1  # Number of times to evaluate on test set
+  batch_size: 2  # Batch size for evaluation
+  
+  use_bootstrap_analysis: true  # Set to true to use bootstrap
+  n_bootstrap_iterations: 10  # Number of bootstrap samples
+  
+  # Model to evaluate - specify which model to use for evaluation
+  model_to_evaluate: "pretrained_anonymized"  # Options: "pretrained", "pretrained_anonymized" or direct path
+    
+  # Output files
+  results_filename: "asr_results_finetuned.csv"  # Individual results per run
+  summary_filename: "asr_evaluation_summary_finetuned.csv"  # Summary statistics
+  bootstrap_results_filename: "asr_bootstrap_results.csv"
+  
+  # Random seed management
+  base_seed: 42  # Base seed, each run gets base_seed + run_number
+
+# Model Training Configuration - SIMPLE VERSION
+model_training:
+  # Base model configuration
+  huggingface_model_name: "facebook/wav2vec2-base-960h"
+  
+  # Audio type selection
+  audio_type: "anonymized"  # Options: "original", "anonymized"
+  model_suffix: "anonymized"  # Used in model naming
+  data_percentage: 1  # Use X% of data (1-100) for testing
+
+  # Early stopping
+  early_stopping_patience: 30
+  early_stopping_metric: "wer"
+
+  # === CONFIGURABLE TRAINING HYPERPARAMETERS ===
+  # Core training parameters
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 1
+  learning_rate: 2e-5
+  weight_decay: 0.005
+  
+  # Training duration
+  epochs: 50
+  max_steps: 300000
+  warmup_steps: 20000
+  
+  # Evaluation and logging
+  eval_strategy: "steps"
+  eval_steps: 500
+  logging_steps: 50
+  
+  # Saving
+  save_strategy: "steps" 
+  save_steps: 500
+  save_total_limit: 2
+  
+  # Performance optimizations
+  fp16: false
+  gradient_checkpointing: false
+  group_by_length: false
+
+  # Dropout and Mask
+  attention_dropout: 0.01
+  activation_dropout: 0.01
+  hidden_dropout: 0.01
+  feat_proj_dropout: 0.01
+  mask_time_prob: 0.01
+  layerdrop: 0.01
+
+# Output Configuration
+output:
+  # Final output files (created at end of pipeline)
+  final_data_dir: "./data/"
+  final_index_filename: "index.csv"
+  final_metadata_filename: "metadata.csv"
+  final_combined_filename: "final_combined_dataset.csv"  # NEW: All-in-one CSV
+  asv_pairs_filename: "asv_pairs.csv"  # NEW: ASV pairs file
+  
+  # Temporary files directory (intermediate results)
+  temporary_data_dir: "./data/temporary/"
+  
+  # CSV Headers for final output files
+  final_index_headers: [
+    "speaker_id", "recording_id", "chunk_id", "original_full_audio_wav_path", 
+    "start_time", "end_time", "audio_length", "silence_lengths", 
+    "chunk_wav_path", "mcadams_anonymized_chunk_wav_path", "mcadams_anonym_value",
+    "original_transcript", "cleaned_transcript", "use", "asr_set", "asv_role"
+  ]
+  
+  final_metadata_headers: [
+    "speaker_id", "num_recordings", "gender", "age", "WAB_type", "WAB_score",
+    "total_speech_length_seconds", "total_speech_length_minutes", 
+    "num_usable_chunks", "asr_chunk_count", "asv_chunk_count"
+  ]
+  
+  # Temporary file headers (for load_data step)
+  load_data_headers: [
+    "patient_id", "recording_id", "file_name", "CHAT_file_path", "wav_file_path"
+  ]
+  
+  save_intermediate_files: true
+  
+  # Audio processing settings
+  audio_format: "wav"
+  audio_sample_rate: 16000
+
+# Logging Configuration
+logging:
+  level: "INFO"  # Options: DEBUG, INFO, WARNING, ERROR
+  log_to_file: true
+  log_to_console: true
+  detailed_progress: true
+  
+  # Separate log files for each component
+  separate_log_files:
+    data_processing: true
+    metadata_extraction: true
+    model_training: true
+    inference: true
